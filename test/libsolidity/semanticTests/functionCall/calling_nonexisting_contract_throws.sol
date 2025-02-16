@@ -21,9 +21,8 @@ contract C {
         return 7;
     }
 }
-
 // ====
-// compileToEwasm: also
+// bytecodeFormat: legacy
 // ----
 // f() -> FAILURE
 // g() -> FAILURE

@@ -32,6 +32,8 @@
 
 #include <boost/filesystem.hpp>
 
+#include<unordered_set>
+
 namespace solidity::test
 {
 using Address = util::h160;
@@ -65,16 +67,15 @@ public:
 
 	// Solidity testing specific features.
 
-	/// Tries to dynamically load an evmc vm supporting evm1 or ewasm and caches the loaded VM.
+	/// Tries to dynamically load an evmc vm supporting evm1 and caches the loaded VM.
 	/// @returns vmc::VM(nullptr) on failure.
 	static evmc::VM& getVM(std::string const& _path = {});
 
 	/// Tries to load all defined evmc vm shared libraries.
 	/// @param _vmPaths paths to multiple evmc shared libraries.
-	/// @throw Exception if multiple evm1 or multiple ewasm evmc vms where loaded.
-	/// @returns A pair of booleans, the first element being true, if an evmc vm supporting evm1 was loaded properly,
-	///          the second being true, if an evmc vm supporting ewasm was loaded properly.
-	static std::tuple<bool, bool> checkVmPaths(std::vector<boost::filesystem::path> const& _vmPaths);
+	/// @throw Exception if multiple evm1 vms where loaded.
+	/// @returns true, if an evmc vm supporting evm1 was loaded properly,
+	static bool checkVmPaths(std::vector<boost::filesystem::path> const& _vmPaths);
 
 	explicit EVMHost(langutil::EVMVersion _evmVersion, evmc::VM& _vm);
 
@@ -92,6 +93,8 @@ public:
 
 	/// @returns contents of storage at @param _addr.
 	StorageMap const& get_address_storage(evmc::address const& _addr);
+
+	u256 totalCodeDepositGas() const { return m_totalCodeDepositGas; }
 
 	static Address convertFromEVMC(evmc::address const& _addr);
 	static evmc::address convertToEVMC(Address const& _addr);
@@ -120,7 +123,18 @@ private:
 	static evmc::Result precompileALTBN128G1Mul(evmc_message const& _message) noexcept;
 	template <evmc_revision Revision>
 	static evmc::Result precompileALTBN128PairingProduct(evmc_message const& _message) noexcept;
-	static evmc::Result precompileGeneric(evmc_message const& _message, std::map<bytes, EVMPrecompileOutput> const& _inOut) noexcept;
+	static evmc::Result precompileBlake2f(evmc_message const& _message) noexcept;
+	/// Generic implementation of a precompile for testing, with hard-coded answers for hard-coded inputs.
+	/// @param _message EVM message to handle.
+	/// @param _inOut Hard-coded inputs and corresponding outputs to be returned.
+	/// @param _ignoresTrailingInput Enable if the precompile only cares about the initial part of
+	///     its input and works exactly the same, regardless of what's in the remaining part. The message will
+	///     be considered a match for a test input even if it's longer.
+	static evmc::Result precompileGeneric(
+		evmc_message const& _message,
+		std::map<bytes, EVMPrecompileOutput> const& _inOut,
+		bool _ignoresTrailingInput = false
+	) noexcept;
 	/// @returns a result object with gas usage and result data taken from @a _data.
 	/// The outcome will be a failure if the limit < required.
 	/// @note The return value is only valid as long as @a _data is alive!
@@ -132,6 +146,14 @@ private:
 	langutil::EVMVersion m_evmVersion;
 	/// EVM version requested from EVMC (matches the above)
 	evmc_revision m_evmRevision;
+
+	/// Store the accounts that have been created in the current transaction.
+	std::unordered_set<evmc::address> m_newlyCreatedAccounts;
+
+	/// The part of the total cost of the current transaction that paid for the code deposits.
+	/// I.e. GAS_CODE_DEPOSIT times the total size of deployed code of all newly created contracts,
+	/// including the current contract itself if it was a creation transaction.
+	u256 m_totalCodeDepositGas;
 };
 
 class EVMHostPrinter

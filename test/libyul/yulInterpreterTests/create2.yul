@@ -5,9 +5,11 @@
 }
 // ====
 // EVMVersion: >=constantinople
+// bytecodeFormat: legacy
 // ----
 // Trace:
 //   CREATE2(0, 0, 32, 32)
 // Memory dump:
 // Storage dump:
 //   0000000000000000000000000000000000000000000000000000000000000000: 0000000000000000000000000000000000000000000000000000000000000020
+// Transient storage dump:

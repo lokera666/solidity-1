@@ -23,10 +23,12 @@ contract C {
 	}
 }
 // ====
-// SMTEngine: all
+// SMTEngine: chc
 // SMTIgnoreCex: yes
+// SMTIgnoreOS: macos
 // ----
 // Warning 6328: (326-356): CHC: Assertion violation happens here.
 // Warning 6328: (579-609): CHC: Assertion violation happens here.
-// Warning 6328: (1080-1110): CHC: Assertion violation might happen here.
-// Warning 4661: (1080-1110): BMC: Assertion violation happens here.
+// Warning 6328: (692-722): CHC: Assertion violation happens here.
+// Warning 6328: (960-990): CHC: Assertion violation happens here.
+// Warning 6328: (1080-1110): CHC: Assertion violation happens here.

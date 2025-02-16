@@ -59,12 +59,11 @@ contract C {
         require(dst3[1][0].y == src3[1][0].y);
     }
 }
-
 // ====
 // compileViaYul: true
 // ----
 // test1()
-// gas irOptimized: 123279
+// gas irOptimized: 123195
 // test2()
-// gas irOptimized: 123073
+// gas irOptimized: 123018
 // test3()

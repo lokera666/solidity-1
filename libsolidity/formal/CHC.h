@@ -57,6 +57,8 @@ public:
 	CHC(
 		smt::EncodingContext& _context,
 		langutil::UniqueErrorReporter& _errorReporter,
+		langutil::UniqueErrorReporter& _unsupportedErrorReporter,
+		langutil::ErrorReporter& _provedSafeReporter,
 		std::map<util::h256, std::string> const& _smtlib2Responses,
 		ReadCallback::Callback const& _smtCallback,
 		ModelCheckerSettings _settings,
@@ -65,13 +67,36 @@ public:
 
 	void analyze(SourceUnit const& _sources);
 
+	struct CHCVerificationTarget: VerificationTarget
+	{
+		unsigned const errorId;
+		ASTNode const* const errorNode;
+
+		friend bool operator<(CHCVerificationTarget const& _a, CHCVerificationTarget const& _b)
+		{
+			return _a.errorId < _b.errorId;
+		}
+	};
+
+	struct SafeTargetsCompare
+	{
+		bool operator()(CHCVerificationTarget const & _lhs, CHCVerificationTarget const & _rhs) const
+		{
+			if (_lhs.errorNode->id() == _rhs.errorNode->id())
+				return _lhs.type  < _rhs.type;
+			else
+				return _lhs.errorNode->id() == _rhs.errorNode->id();
+		}
+	};
+
 	struct ReportTargetInfo
 	{
 		langutil::ErrorId error;
 		langutil::SourceLocation location;
 		std::string message;
 	};
-	std::map<ASTNode const*, std::set<VerificationTargetType>, smt::EncodingContext::IdCompare> const& safeTargets() const { return m_safeTargets; }
+
+	std::map<ASTNode const*, std::set<CHCVerificationTarget, SafeTargetsCompare>, smt::EncodingContext::IdCompare> const& safeTargets() const { return m_safeTargets; }
 	std::map<ASTNode const*, std::map<VerificationTargetType, ReportTargetInfo>, smt::EncodingContext::IdCompare> const& unsafeTargets() const { return m_unsafeTargets; }
 
 	/// This is used if the Horn solver is not directly linked into this binary.
@@ -98,6 +123,8 @@ private:
 	bool visit(ForStatement const&) override;
 	void endVisit(ForStatement const&) override;
 	void endVisit(FunctionCall const& _node) override;
+	void endVisit(BinaryOperation const& _op) override;
+	void endVisit(UnaryOperation const& _op) override;
 	void endVisit(Break const& _node) override;
 	void endVisit(Continue const& _node) override;
 	void endVisit(IndexRangeAccess const& _node) override;
@@ -114,6 +141,13 @@ private:
 	void visitAddMulMod(FunctionCall const& _funCall) override;
 	void visitDeployment(FunctionCall const& _funCall);
 	void internalFunctionCall(FunctionCall const& _funCall);
+	void internalFunctionCall(
+		FunctionDefinition const* _funDef,
+		std::optional<Expression const*> _boundArgumentCall,
+		FunctionType const* _funType,
+		std::vector<Expression const*> const& _arguments,
+		smtutil::Expression _contractAddressValue
+	);
 	void externalFunctionCall(FunctionCall const& _funCall);
 	void externalFunctionCallToTrustedCode(FunctionCall const& _funCall);
 	void addNondetCalls(ContractDefinition const& _contract);
@@ -139,6 +173,7 @@ private:
 	void clearIndices(ContractDefinition const* _contract, FunctionDefinition const* _function = nullptr) override;
 	void setCurrentBlock(Predicate const& _block);
 	std::set<unsigned> transactionVerificationTargetsIds(ASTNode const* _txRoot);
+	bool usesStaticCall(FunctionDefinition const* _funDef, FunctionType const* _funType);
 	bool usesStaticCall(FunctionCall const& _funCall);
 	//@}
 
@@ -190,7 +225,6 @@ private:
 	smtutil::Expression interface(ContractDefinition const& _contract);
 	/// Error predicate over current variables.
 	smtutil::Expression error();
-	smtutil::Expression error(unsigned _idx);
 
 	/// Creates a block for the given _node.
 	Predicate const* createBlock(ASTNode const* _node, PredicateType _predType, std::string const& _prefix = "");
@@ -233,7 +267,13 @@ private:
 	/// @returns a predicate application after checking the predicate's type.
 	smtutil::Expression predicate(Predicate const& _block);
 	/// @returns the summary predicate for the called function.
-	smtutil::Expression predicate(FunctionCall const& _funCall);
+	smtutil::Expression predicate(
+		FunctionDefinition const* _funDef,
+		std::optional<Expression const*> _boundArgumentCall,
+		FunctionType const* _funType,
+		std::vector<Expression const*> _arguments,
+		smtutil::Expression _contractAddressValue
+	);
 	/// @returns a predicate that defines a contract initializer for _contract in the context of _contractContext.
 	smtutil::Expression initializer(ContractDefinition const& _contract, ContractDefinition const& _contractContext);
 	/// @returns a predicate that defines a constructor summary.
@@ -256,13 +296,11 @@ private:
 	void addRule(smtutil::Expression const& _rule, std::string const& _ruleName);
 	/// @returns <true, invariant, empty> if query is unsatisfiable (safe).
 	/// @returns <false, Expression(true), model> otherwise.
-	std::tuple<smtutil::CheckResult, smtutil::Expression, smtutil::CHCSolverInterface::CexGraph> query(smtutil::Expression const& _query, langutil::SourceLocation const& _location);
+	smtutil::CHCSolverInterface::QueryResult query(smtutil::Expression const& _query, langutil::SourceLocation const& _location);
 
 	void verificationTargetEncountered(ASTNode const* const _errorNode, VerificationTargetType _type, smtutil::Expression const& _errorCondition);
 
 	void checkVerificationTargets();
-	// Forward declarations. Definitions are below.
-	struct CHCVerificationTarget;
 	struct CHCQueryPlaceholder;
 	void checkAssertTarget(ASTNode const* _scope, CHCVerificationTarget const& _target);
 	void checkAndReportTarget(
@@ -272,6 +310,8 @@ private:
 		std::string _satMsg,
 		std::string _unknownMsg = ""
 	);
+
+	std::pair<std::string, langutil::ErrorId> targetDescription(CHCVerificationTarget const& _target);
 
 	std::optional<std::string> generateCounterexample(smtutil::CHCSolverInterface::CexGraph const& _graph, std::string const& _root);
 
@@ -333,6 +373,8 @@ private:
 
 	/// Adds constraints that decrease the balance of the caller by _value.
 	void decreaseBalanceFromOptionsValue(Expression const& _value);
+
+	std::vector<smtutil::Expression> commonStateExpressions(smtutil::Expression const& error, smtutil::Expression const& address);
 	//@}
 
 	/// Predicates.
@@ -370,12 +412,6 @@ private:
 
 	/// Verification targets.
 	//@{
-	struct CHCVerificationTarget: VerificationTarget
-	{
-		unsigned const errorId;
-		ASTNode const* const errorNode;
-	};
-
 	/// Query placeholder stores information necessary to create the final query edge in the CHC system.
 	/// It is combined with the unique error id (and error type) to create a complete Verification Target.
 	struct CHCQueryPlaceholder
@@ -398,7 +434,7 @@ private:
 	std::map<unsigned, CHCVerificationTarget> m_verificationTargets;
 
 	/// Targets proved safe.
-	std::map<ASTNode const*, std::set<VerificationTargetType>, smt::EncodingContext::IdCompare> m_safeTargets;
+	std::map<ASTNode const*, std::set<CHCVerificationTarget, SafeTargetsCompare>, smt::EncodingContext::IdCompare> m_safeTargets;
 	/// Targets proved unsafe.
 	std::map<ASTNode const*, std::map<VerificationTargetType, ReportTargetInfo>, smt::EncodingContext::IdCompare> m_unsafeTargets;
 	/// Targets not proved.

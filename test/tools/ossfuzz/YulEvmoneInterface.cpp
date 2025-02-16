@@ -27,7 +27,7 @@ bytes YulAssembler::assemble()
 {
 	if (
 		!m_stack.parseAndAnalyze("source", m_yulProgram) ||
-		!m_stack.parserResult()->code ||
+		!m_stack.parserResult()->code() ||
 		!m_stack.parserResult()->analysisInfo ||
 		langutil::Error::containsErrors(m_stack.errors())
 	)
@@ -36,6 +36,11 @@ bytes YulAssembler::assemble()
 	if (m_optimiseYul)
 		m_stack.optimize();
 	return m_stack.assemble(YulStack::Machine::EVM).bytecode->bytecode;
+}
+
+std::shared_ptr<yul::Object> YulAssembler::object()
+{
+	return m_stack.parserResult();
 }
 
 evmc::Result YulEvmoneUtility::deployCode(bytes const& _input, EVMHost& _host)

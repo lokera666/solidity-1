@@ -22,8 +22,8 @@
 #include <libyul/optimiser/NameCollector.h>
 
 #include <libyul/AST.h>
+#include <libyul/Utilities.h>
 
-using namespace std;
 using namespace solidity;
 using namespace solidity::yul;
 using namespace solidity::util;
@@ -56,25 +56,25 @@ void ReferencesCounter::operator()(Identifier const& _identifier)
 
 void ReferencesCounter::operator()(FunctionCall const& _funCall)
 {
-	++m_references[_funCall.functionName.name];
+	++m_references[functionNameToHandle(_funCall.functionName)];
 	ASTWalker::operator()(_funCall);
 }
 
-map<YulString, size_t> ReferencesCounter::countReferences(Block const& _block)
+std::map<FunctionHandle, size_t> ReferencesCounter::countReferences(Block const& _block)
 {
 	ReferencesCounter counter;
 	counter(_block);
 	return std::move(counter.m_references);
 }
 
-map<YulString, size_t> ReferencesCounter::countReferences(FunctionDefinition const& _function)
+std::map<FunctionHandle, size_t> ReferencesCounter::countReferences(FunctionDefinition const& _function)
 {
 	ReferencesCounter counter;
 	counter(_function);
 	return std::move(counter.m_references);
 }
 
-map<YulString, size_t> ReferencesCounter::countReferences(Expression const& _expression)
+std::map<FunctionHandle, size_t> ReferencesCounter::countReferences(Expression const& _expression)
 {
 	ReferencesCounter counter;
 	counter.visit(_expression);
@@ -86,28 +86,28 @@ void VariableReferencesCounter::operator()(Identifier const& _identifier)
 	++m_references[_identifier.name];
 }
 
-map<YulString, size_t> VariableReferencesCounter::countReferences(Block const& _block)
+std::map<YulName, size_t> VariableReferencesCounter::countReferences(Block const& _block)
 {
 	VariableReferencesCounter counter;
 	counter(_block);
 	return std::move(counter.m_references);
 }
 
-map<YulString, size_t> VariableReferencesCounter::countReferences(FunctionDefinition const& _function)
+std::map<YulName, size_t> VariableReferencesCounter::countReferences(FunctionDefinition const& _function)
 {
 	VariableReferencesCounter counter;
 	counter(_function);
 	return std::move(counter.m_references);
 }
 
-map<YulString, size_t> VariableReferencesCounter::countReferences(Expression const& _expression)
+std::map<YulName, size_t> VariableReferencesCounter::countReferences(Expression const& _expression)
 {
 	VariableReferencesCounter counter;
 	counter.visit(_expression);
 	return std::move(counter.m_references);
 }
 
-map<YulString, size_t> VariableReferencesCounter::countReferences(Statement const& _statement)
+std::map<YulName, size_t> VariableReferencesCounter::countReferences(Statement const& _statement)
 {
 	VariableReferencesCounter counter;
 	counter.visit(_statement);
@@ -139,9 +139,9 @@ void AssignmentsSinceContinue::operator()(FunctionDefinition const&)
 	yulAssert(false, "");
 }
 
-std::set<YulString> solidity::yul::assignedVariableNames(Block const& _code)
+std::set<YulName> solidity::yul::assignedVariableNames(Block const& _code)
 {
-	std::set<YulString> names;
+	std::set<YulName> names;
 	forEach<Assignment const>(_code, [&](Assignment const& _assignment) {
 		for (auto const& var: _assignment.variableNames)
 			names.emplace(var.name);
@@ -149,9 +149,9 @@ std::set<YulString> solidity::yul::assignedVariableNames(Block const& _code)
 	return names;
 }
 
-map<YulString, FunctionDefinition const*> solidity::yul::allFunctionDefinitions(Block const& _block)
+std::map<YulName, FunctionDefinition const*> solidity::yul::allFunctionDefinitions(Block const& _block)
 {
-	std::map<YulString, FunctionDefinition const*> result;
+	std::map<YulName, FunctionDefinition const*> result;
 	forEach<FunctionDefinition const>(_block, [&](FunctionDefinition const& _function) {
 		result[_function.name] = &_function;
 	});

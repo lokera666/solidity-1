@@ -4,7 +4,7 @@ contract C {
     }
 }
 // ====
-// compileToEwasm: also
+// bytecodeFormat: legacy
 // ----
 // f() -> true
 // f() -> true

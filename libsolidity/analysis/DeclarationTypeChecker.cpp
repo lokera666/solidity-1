@@ -29,7 +29,6 @@
 
 #include <range/v3/view/transform.hpp>
 
-using namespace std;
 using namespace solidity::langutil;
 using namespace solidity::frontend;
 
@@ -330,16 +329,16 @@ void DeclarationTypeChecker::endVisit(ArrayTypeName const& _typeName)
 	Type const* baseType = _typeName.baseType().annotation().type;
 	if (!baseType)
 	{
-		solAssert(!m_errorReporter.errors().empty(), "");
+		solAssert(m_errorReporter.hasErrors(), "");
 		return;
 	}
 
 	if (Expression const* length = _typeName.length())
 	{
-		optional<rational> lengthValue;
+		std::optional<rational> lengthValue;
 		if (length->annotation().type && length->annotation().type->category() == Type::Category::RationalNumber)
 			lengthValue = dynamic_cast<RationalNumberType const&>(*length->annotation().type).value();
-		else if (optional<ConstantEvaluator::TypedRational> value = ConstantEvaluator::evaluate(m_errorReporter, *length))
+		else if (std::optional<ConstantEvaluator::TypedRational> value = ConstantEvaluator::evaluate(m_errorReporter, *length))
 			lengthValue = value->value;
 
 		if (!lengthValue)
@@ -399,22 +398,30 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 	Location varLoc = _variable.referenceLocation();
 	DataLocation typeLoc = DataLocation::Memory;
 
-	set<Location> allowedDataLocations = _variable.allowedDataLocations();
+	if (varLoc == VariableDeclaration::Location::Transient && !m_evmVersion.supportsTransientStorage())
+		m_errorReporter.declarationError(
+			7985_error,
+			_variable.location(),
+			"Transient storage is not supported by EVM versions older than cancun."
+		);
+
+	std::set<Location> allowedDataLocations = _variable.allowedDataLocations();
 	if (!allowedDataLocations.count(varLoc))
 	{
-		auto locationToString = [](VariableDeclaration::Location _location) -> string
+		auto locationToString = [](VariableDeclaration::Location _location) -> std::string
 		{
 			switch (_location)
 			{
 				case Location::Memory: return "\"memory\"";
 				case Location::Storage: return "\"storage\"";
+				case Location::Transient: return "\"transient\"";
 				case Location::CallData: return "\"calldata\"";
 				case Location::Unspecified: return "none";
 			}
 			return {};
 		};
 
-		string errorString;
+		std::string errorString;
 		if (!_variable.hasReferenceOrMappingType())
 			errorString = "Data location can only be specified for array, struct or mapping types";
 		else
@@ -430,9 +437,9 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 			else if (_variable.isCallableOrCatchParameter())
 				errorString +=
 					" for " +
-					string(_variable.isReturnParameter() ? "return " : "") +
+					std::string(_variable.isReturnParameter() ? "return " : "") +
 					"parameter in" +
-					string(_variable.isExternalCallableParameter() ? " external" : "") +
+					std::string(_variable.isExternalCallableParameter() ? " external" : "") +
 					" function";
 			else
 				errorString += " for variable";
@@ -457,8 +464,32 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 	}
 	else if (_variable.isStateVariable())
 	{
-		solAssert(varLoc == Location::Unspecified, "");
-		typeLoc = (_variable.isConstant() || _variable.immutable()) ? DataLocation::Memory : DataLocation::Storage;
+		switch (varLoc)
+		{
+			case Location::Unspecified:
+				typeLoc = (_variable.isConstant() || _variable.immutable()) ? DataLocation::Memory : DataLocation::Storage;
+				break;
+			case Location::Transient:
+				if (_variable.isConstant() || _variable.immutable())
+					m_errorReporter.declarationError(
+						2197_error,
+						_variable.location(),
+						"Transient cannot be used as data location for constant or immutable variables."
+					);
+
+				if (_variable.value())
+					m_errorReporter.declarationError(
+						9825_error,
+						_variable.location(),
+						"Initialization of transient storage state variables is not supported."
+					);
+
+				typeLoc = DataLocation::Transient;
+				break;
+			default:
+				solAssert(false);
+				break;
+		}
 	}
 	else if (
 		dynamic_cast<StructDefinition const*>(_variable.scope()) ||
@@ -477,6 +508,9 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 				break;
 			case Location::CallData:
 				typeLoc = DataLocation::CallData;
+				break;
+			case Location::Transient:
+				solUnimplemented("Transient data location cannot be used in this kind of variable or parameter declaration.");
 				break;
 			case Location::Unspecified:
 				solAssert(!_variable.hasReferenceOrMappingType(), "Data location not properly set.");
@@ -497,6 +531,9 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 		if (!allowed)
 			m_errorReporter.fatalTypeError(9259_error, _variable.location(), "Only constants of value type and byte array type are implemented.");
 	}
+
+	if (!type->isValueType())
+		solUnimplementedAssert(typeLoc != DataLocation::Transient, "Transient data location is only supported for value types.");
 
 	_variable.annotation().type = type;
 }

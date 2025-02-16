@@ -41,7 +41,6 @@ public:
 		langutil::EVMVersion evmVersion;
 		std::optional<uint8_t> eofVersion;
 		std::vector<boost::filesystem::path> vmPaths;
-		bool enforceCompileToEwasm = false;
 		bool enforceGasCost = false;
 		u256 enforceGasCostMinValue;
 	};
@@ -101,7 +100,6 @@ protected:
 			++_it;
 	}
 
-	void printIndented(std::ostream& _stream, std::string const& _output, std::string const& _linePrefix = "") const;
 	TestCase::TestResult checkResult(std::ostream& _stream, const std::string& _linePrefix, bool const _formatted);
 
 	std::string m_source;
@@ -114,6 +112,10 @@ protected:
 
 class EVMVersionRestrictedTestCase: public TestCase
 {
+private:
+	void processEVMVersionSetting();
+	void processBytecodeFormatSetting();
+
 protected:
 	EVMVersionRestrictedTestCase(std::string const& _filename);
 };

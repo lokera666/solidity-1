@@ -36,8 +36,12 @@ contract C {
         return true;
     }
 }
+// ====
+// bytecodeFormat: legacy
 // ----
 // testRuntime() -> true
-// gas legacy: 101579
+// gas legacy: 76575
+// gas legacy code: 23600
 // testCreation() -> true
-// gas legacy: 102009
+// gas legacy: 76999
+// gas legacy code: 23600

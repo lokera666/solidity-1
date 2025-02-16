@@ -4,7 +4,7 @@ The `buildpack-deps` docker images are used to compile and test solidity within 
 
 ## GitHub Workflow
 
-The creation of the images are triggered by a single workflow, defined in `.github/workflows/buildpack-deps.yml`.
+The creation of the images is triggered by a single workflow, defined in `.github/workflows/buildpack-deps.yml`.
 For each resulting `buildpack-deps` docker image a strategy is defined in the workflow file - the image variant.
 The workflow gets triggered, if any Dockerfile defined in `scripts/docker/buildpack-deps/Dockerfile.*` were changed
 within the PR.
@@ -27,7 +27,7 @@ If the version check was successful, the docker image will be built using the Do
 
 The resulting docker image will be tested by executing the corresponding `scripts/ci/buildpack-deps_test_*` scripts.
 Some of these scripts are symlinked to `scripts/ci/build.sh`, except the following two:
- * `buildpack-deps-ubuntu1604.clang.ossfuzz` => `scripts/ci/build_ossfuzz.sh`
+ * `buildpack-deps-ubuntu.clang.ossfuzz` => `scripts/ci/build_ossfuzz.sh`
  * `buildpack-deps_test_emscripten.sh` => `scripts/ci/build_emscripten.sh`
 
 These scripts `scripts/ci/build.sh` and `scripts/ci/build_ossfuzz.sh` are also used by CircleCI, see `.circleci/config.yml`.

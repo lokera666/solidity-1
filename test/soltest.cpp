@@ -36,6 +36,7 @@
 #endif
 
 #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 
 #include <test/InteractiveTests.h>
 #include <test/Common.h>
@@ -49,7 +50,6 @@
 using namespace boost::unit_test;
 using namespace solidity::frontend::test;
 namespace fs = boost::filesystem;
-using namespace std;
 
 namespace
 {
@@ -100,7 +100,7 @@ void runTestCase(TestCase::Config const& _config, TestCase::TestCaseCreator cons
 {
 	try
 	{
-		stringstream errorStream;
+		std::stringstream errorStream;
 		auto testCase = _testCaseCreator(_config);
 		if (testCase->shouldRun())
 			switch (testCase->run(errorStream))
@@ -115,17 +115,9 @@ void runTestCase(TestCase::Config const& _config, TestCase::TestCaseCreator cons
 					break;
 			}
 	}
-	catch (boost::exception const& _e)
-	{
-		BOOST_ERROR("Exception during extracted test: " << boost::diagnostic_information(_e));
-	}
-	catch (std::exception const& _e)
-	{
-		BOOST_ERROR("Exception during extracted test: " << boost::diagnostic_information(_e));
-	}
 	catch (...)
 	{
-		BOOST_ERROR("Unknown exception during extracted test: " << boost::current_exception_diagnostic_information());
+		BOOST_ERROR("Exception during extracted test: " << boost::current_exception_diagnostic_information());
 	}
 }
 
@@ -133,8 +125,7 @@ int registerTests(
 	boost::unit_test::test_suite& _suite,
 	boost::filesystem::path const& _basepath,
 	boost::filesystem::path const& _path,
-	bool _enforceCompileToEwasm,
-	vector<string> const& _labels,
+	std::vector<std::string> const& _labels,
 	TestCase::TestCaseCreator _testCaseCreator,
 	solidity::test::Batcher& _batcher
 )
@@ -146,7 +137,6 @@ int registerTests(
 		solidity::test::CommonOptions::get().evmVersion(),
 		solidity::test::CommonOptions::get().eofVersion(),
 		solidity::test::CommonOptions::get().vmPaths,
-		_enforceCompileToEwasm,
 		solidity::test::CommonOptions::get().enforceGasTest,
 		solidity::test::CommonOptions::get().enforceGasTestMinValue,
 	};
@@ -164,7 +154,6 @@ int registerTests(
 				numTestsAdded += registerTests(
 					*sub_suite,
 					_basepath, _path / entry.path().filename(),
-					_enforceCompileToEwasm,
 					_labels,
 					_testCaseCreator,
 					_batcher
@@ -179,9 +168,9 @@ int registerTests(
 			// This must be a vector of unique_ptrs because Boost.Test keeps the equivalent of a string_view to the filename
 			// that is passed in. If the strings were stored directly in the vector, pointers/references to them would be
 			// invalidated on reallocation.
-			static vector<unique_ptr<string const>> filenames;
+			static std::vector<std::unique_ptr<std::string const>> filenames;
 
-			filenames.emplace_back(make_unique<string>(_path.string()));
+			filenames.emplace_back(std::make_unique<std::string>(_path.string()));
 			auto test_case = make_test_case(
 				[config, _testCaseCreator]
 				{
@@ -239,14 +228,11 @@ test_suite* init_unit_test_suite(int /*argc*/, char* /*argv*/[])
 			exit(EXIT_FAILURE);
 
 		if (solidity::test::CommonOptions::get().disableSemanticTests)
-			cout << endl << "--- SKIPPING ALL SEMANTICS TESTS ---" << endl << endl;
-
-		if (!solidity::test::CommonOptions::get().enforceGasTest)
-			cout << endl << "WARNING :: Gas Cost Expectations are not being enforced" << endl << endl;
+			std::cout << std::endl << "--- SKIPPING ALL SEMANTICS TESTS ---" << std::endl << std::endl;
 
 		Batcher batcher(CommonOptions::get().selectedBatch, CommonOptions::get().batches);
 		if (CommonOptions::get().batches > 1)
-			cout << "Batch " << CommonOptions::get().selectedBatch << " out of " << CommonOptions::get().batches << endl;
+			std::cout << "Batch " << CommonOptions::get().selectedBatch << " out of " << CommonOptions::get().batches << std::endl;
 
 		// Batch the boost tests
 		BoostBatcher boostBatcher(batcher);
@@ -269,7 +255,6 @@ test_suite* init_unit_test_suite(int /*argc*/, char* /*argv*/[])
 				master,
 				options.testPath / ts.path,
 				ts.subpath,
-				options.enforceCompileToEwasm,
 				ts.labels,
 				ts.testCaseCreator,
 				batcher
@@ -294,12 +279,12 @@ test_suite* init_unit_test_suite(int /*argc*/, char* /*argv*/[])
 	}
 	catch (solidity::test::ConfigException const& exception)
 	{
-		cerr << exception.what() << endl;
+		std::cerr << exception.what() << std::endl;
 		exit(EXIT_FAILURE);
 	}
 	catch (std::runtime_error const& exception)
 	{
-		cerr << exception.what() << endl;
+		std::cerr << exception.what() << std::endl;
 		exit(EXIT_FAILURE);
 	}
 

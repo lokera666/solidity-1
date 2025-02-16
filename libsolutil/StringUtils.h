@@ -67,24 +67,24 @@ std::string joinHumanReadable
 {
 	auto const itEnd = end(_list);
 
-	std::string result;
+	std::stringstream result;
 
 	for (auto it = begin(_list); it != itEnd; )
 	{
-		std::string element = *it;
+		auto const& element = *it;
 		bool first = (it == begin(_list));
 		++it;
 		if (!first)
 		{
 			if (it == itEnd && !_lastSeparator.empty())
-				result += _lastSeparator; // last iteration
+				result << _lastSeparator; // last iteration
 			else
-				result += _separator;
+				result << _separator;
 		}
-		result += std::move(element);
+		result << element;
 	}
 
-	return result;
+	return result.str();
 }
 
 /// Joins collection of strings just like joinHumanReadable, but prepends the separator
@@ -168,12 +168,44 @@ inline bool isDigit(char _c)
 	return isdigit(_c, std::locale::classic());
 }
 
-// Checks if character is printable using classic "C" locale
+/// Checks if character is printable using classic "C" locale
 /// @param _c character to be checked
 /// @return true if _c is a printable character, false otherwise.
 inline bool isPrint(char _c)
 {
 	return isprint(_c, std::locale::classic());
+}
+
+/// Adds a prefix to every line in the input.
+/// @see printPrefixed()
+std::string prefixLines(
+	std::string const& _input,
+	std::string const& _prefix,
+	bool _trimPrefix = true
+);
+
+/// Prints to a stream, adding a prefix to every line in the input.
+/// Assumes \n as the line separator.
+/// @param _trimPrefix If true, the function avoids introducing trailing whitespace on empty lines.
+///     This is achieved by removing trailing spaces from the prefix on such lines.
+///     Note that tabs and newlines are not removed, only spaces are.
+/// @param _finalNewline If true, an extra \n will be printed at the end of @a _input if it does
+///     not already end with one.
+void printPrefixed(
+	std::ostream& _output,
+	std::string const& _input,
+	std::string const& _prefix,
+	bool _trimPrefix = true,
+	bool _ensureFinalNewline = true
+);
+
+/// Adds a standard indent of 4 spaces to every line in the input.
+/// Assumes \n as the line separator.
+/// @param _indentEmptyLines If true, the indent will be applied to empty lines as well, resulting
+///     such lines containing trailing whitespace.
+inline std::string indent(std::string const& _input, bool _indentEmptyLines = false)
+{
+	return prefixLines(_input, "    ", !_indentEmptyLines);
 }
 
 }

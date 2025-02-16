@@ -25,7 +25,6 @@
 
 #include <functional>
 
-using namespace std;
 using namespace std::placeholders;
 using namespace solidity::langutil;
 using namespace solidity::frontend;
@@ -44,7 +43,7 @@ void ControlFlowAnalyzer::analyze(FunctionDefinition const& _function, ContractD
 	if (!_function.isImplemented())
 		return;
 
-	optional<string> mostDerivedContractName;
+	std::optional<std::string> mostDerivedContractName;
 
 	// The name of the most derived contract only required if it differs from
 	// the functions contract
@@ -61,13 +60,13 @@ void ControlFlowAnalyzer::analyze(FunctionDefinition const& _function, ContractD
 }
 
 
-void ControlFlowAnalyzer::checkUninitializedAccess(CFGNode const* _entry, CFGNode const* _exit, bool _emptyBody, optional<string> _contractName)
+void ControlFlowAnalyzer::checkUninitializedAccess(CFGNode const* _entry, CFGNode const* _exit, bool _emptyBody, std::optional<std::string> _contractName)
 {
 	struct NodeInfo
 	{
-		set<VariableDeclaration const*> unassignedVariablesAtEntry;
-		set<VariableDeclaration const*> unassignedVariablesAtExit;
-		set<VariableOccurrence const*> uninitializedVariableAccesses;
+		std::set<VariableDeclaration const*> unassignedVariablesAtEntry;
+		std::set<VariableDeclaration const*> unassignedVariablesAtExit;
+		std::set<VariableOccurrence const*> uninitializedVariableAccesses;
 		/// Propagate the information from another node to this node.
 		/// To be used to propagate information from a node to its exit nodes.
 		/// Returns true, if new variables were added and thus the current node has
@@ -75,17 +74,17 @@ void ControlFlowAnalyzer::checkUninitializedAccess(CFGNode const* _entry, CFGNod
 		bool propagateFrom(NodeInfo const& _entryNode)
 		{
 			size_t previousUnassignedVariablesAtEntry = unassignedVariablesAtEntry.size();
-			size_t previousUninitializedVariableAccessess = uninitializedVariableAccesses.size();
+			size_t previousUninitializedVariableAccesses = uninitializedVariableAccesses.size();
 			unassignedVariablesAtEntry += _entryNode.unassignedVariablesAtExit;
 			uninitializedVariableAccesses += _entryNode.uninitializedVariableAccesses;
 			return
 				unassignedVariablesAtEntry.size() > previousUnassignedVariablesAtEntry ||
-				uninitializedVariableAccesses.size() > previousUninitializedVariableAccessess
+				uninitializedVariableAccesses.size() > previousUninitializedVariableAccesses
 			;
 		}
 	};
-	map<CFGNode const*, NodeInfo> nodeInfos;
-	set<CFGNode const*> nodesToTraverse;
+	std::map<CFGNode const*, NodeInfo> nodeInfos;
+	std::set<CFGNode const*> nodesToTraverse;
 	nodesToTraverse.insert(_entry);
 
 	// Walk all paths starting from the nodes in ``nodesToTraverse`` until ``NodeInfo::propagateFrom``
@@ -138,7 +137,7 @@ void ControlFlowAnalyzer::checkUninitializedAccess(CFGNode const* _entry, CFGNod
 	auto const& exitInfo = nodeInfos[_exit];
 	if (!exitInfo.uninitializedVariableAccesses.empty())
 	{
-		vector<VariableOccurrence const*> uninitializedAccessesOrdered(
+		std::vector<VariableOccurrence const*> uninitializedAccessesOrdered(
 			exitInfo.uninitializedVariableAccesses.begin(),
 			exitInfo.uninitializedVariableAccesses.end()
 		);
@@ -168,7 +167,7 @@ void ControlFlowAnalyzer::checkUninitializedAccess(CFGNode const* _entry, CFGNod
 						varDecl.location(),
 					ssl,
 					"This variable is of " +
-					string(isStorage ? "storage" : "calldata") +
+					std::string(isStorage ? "storage" : "calldata") +
 					" pointer type and can be " +
 					(variableOccurrence->kind() == VariableOccurrence::Kind::Return ? "returned" : "accessed") +
 					" without prior assignment, which would lead to undefined behaviour."

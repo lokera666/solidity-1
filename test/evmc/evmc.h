@@ -44,7 +44,7 @@ enum
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 10
+    EVMC_ABI_VERSION = 12
 };
 
 
@@ -79,7 +79,8 @@ enum evmc_call_kind
                                 The value param ignored. */
     EVMC_CALLCODE = 2,     /**< Request CALLCODE. */
     EVMC_CREATE = 3,       /**< Request CREATE. */
-    EVMC_CREATE2 = 4       /**< Request CREATE2. Valid since Constantinople.*/
+    EVMC_CREATE2 = 4,      /**< Request CREATE2. Valid since Constantinople.*/
+    EVMC_EOFCREATE = 5     /**< Request EOFCREATE. Valid since Prague.*/
 };
 
 /** The flags for ::evmc_message. */
@@ -168,7 +169,8 @@ struct evmc_message
     /**
      * The optional value used in new contract address construction.
      *
-     * Needed only for a Host to calculate created address when kind is ::EVMC_CREATE2.
+     * Needed only for a Host to calculate created address when kind is ::EVMC_CREATE2 or
+     * ::EVMC_EOFCREATE.
      * Ignored in evmc_execute_fn().
      */
     evmc_bytes32 create2_salt;
@@ -179,7 +181,7 @@ struct evmc_message
      * For ::EVMC_CALLCODE or ::EVMC_DELEGATECALL this may be different from
      * the evmc_message::recipient.
      * Not required when invoking evmc_execute_fn(), only when invoking evmc_call_fn().
-     * Ignored if kind is ::EVMC_CREATE or ::EVMC_CREATE2.
+     * Ignored if kind is ::EVMC_CREATE, ::EVMC_CREATE2 or ::EVMC_EOFCREATE.
      *
      * In case of ::EVMC_CAPABILITY_PRECOMPILES implementation, this fields should be inspected
      * to identify the requested precompile.
@@ -187,21 +189,43 @@ struct evmc_message
      * Defined as `c` in the Yellow Paper.
      */
     evmc_address code_address;
+
+    /**
+     * The code to be executed.
+     */
+    const uint8_t* code;
+
+    /**
+     * The length of the code to be executed.
+     */
+    size_t code_size;
 };
 
+/** The hashed initcode used for TXCREATE instruction. */
+typedef struct evmc_tx_initcode
+{
+    evmc_bytes32 hash;   /**< The initcode hash. */
+    const uint8_t* code; /**< The code. */
+    size_t code_size;    /**< The length of the code. */
+} evmc_tx_initcode;
 
 /** The transaction and block data for execution. */
 struct evmc_tx_context
 {
-    evmc_uint256be tx_gas_price;      /**< The transaction gas price. */
-    evmc_address tx_origin;           /**< The transaction origin account. */
-    evmc_address block_coinbase;      /**< The miner of the block. */
-    int64_t block_number;             /**< The block number. */
-    int64_t block_timestamp;          /**< The block timestamp. */
-    int64_t block_gas_limit;          /**< The block gas limit. */
-    evmc_uint256be block_prev_randao; /**< The block previous RANDAO (EIP-4399). */
-    evmc_uint256be chain_id;          /**< The blockchain's ChainID. */
-    evmc_uint256be block_base_fee;    /**< The block base fee per gas (EIP-1559, EIP-3198). */
+    evmc_uint256be tx_gas_price;       /**< The transaction gas price. */
+    evmc_address tx_origin;            /**< The transaction origin account. */
+    evmc_address block_coinbase;       /**< The miner of the block. */
+    int64_t block_number;              /**< The block number. */
+    int64_t block_timestamp;           /**< The block timestamp. */
+    int64_t block_gas_limit;           /**< The block gas limit. */
+    evmc_uint256be block_prev_randao;  /**< The block previous RANDAO (EIP-4399). */
+    evmc_uint256be chain_id;           /**< The blockchain's ChainID. */
+    evmc_uint256be block_base_fee;     /**< The block base fee per gas (EIP-1559, EIP-3198). */
+    evmc_uint256be blob_base_fee;      /**< The blob base fee (EIP-7516). */
+    const evmc_bytes32* blob_hashes;   /**< The array of blob hashes (EIP-4844). */
+    size_t blob_hashes_count;          /**< The number of blob hashes (EIP-4844). */
+    const evmc_tx_initcode* initcodes; /**< The array of transaction initcodes (TXCREATE). */
+    size_t initcodes_count;            /**< The number of transaction initcodes (TXCREATE). */
 };
 
 /**
@@ -412,20 +436,21 @@ struct evmc_result
     /**
      * The reference to output data.
      *
-     *  The output contains data coming from RETURN opcode (iff evmc_result::code
-     *  field is ::EVMC_SUCCESS) or from REVERT opcode.
+     * The output contains data coming from RETURN opcode (iff evmc_result::code
+     * field is ::EVMC_SUCCESS) or from REVERT opcode.
      *
-     *  The memory containing the output data is owned by EVM and has to be
-     *  freed with evmc_result::release().
+     * The memory containing the output data is owned by EVM and has to be
+     * freed with evmc_result::release().
      *
-     *  This MAY be NULL.
+     * This pointer MAY be NULL.
+     * If evmc_result::output_size is 0 this pointer MUST NOT be dereferenced.
      */
     const uint8_t* output_data;
 
     /**
      * The size of the output data.
      *
-     *  If output_data is NULL this MUST be 0.
+     * If evmc_result::output_data is NULL this MUST be 0.
      */
     size_t output_size;
 
@@ -463,13 +488,13 @@ struct evmc_result
     /**
      * Reserved data that MAY be used by a evmc_result object creator.
      *
-     *  This reserved 4 bytes together with 20 bytes from create_address form
-     *  24 bytes of memory called "optional data" within evmc_result struct
-     *  to be optionally used by the evmc_result object creator.
+     * This reserved 4 bytes together with 20 bytes from create_address form
+     * 24 bytes of memory called "optional data" within evmc_result struct
+     * to be optionally used by the evmc_result object creator.
      *
-     *  @see evmc_result_optional_data, evmc_get_optional_data().
+     * @see evmc_result_optional_data, evmc_get_optional_data().
      *
-     *  Also extends the size of the evmc_result to 64 bytes (full cache line).
+     * Also extends the size of the evmc_result to 64 bytes (full cache line).
      */
     uint8_t padding[4];
 };
@@ -501,6 +526,22 @@ typedef bool (*evmc_account_exists_fn)(struct evmc_host_context* context,
 typedef evmc_bytes32 (*evmc_get_storage_fn)(struct evmc_host_context* context,
                                             const evmc_address* address,
                                             const evmc_bytes32* key);
+
+/**
+ * Get transient storage callback function.
+ *
+ * This callback function is used by a VM to query
+ * the given account transient storage (EIP-1153) entry.
+ *
+ * @param context  The Host execution context.
+ * @param address  The address of the account.
+ * @param key      The index of the account's transient storage entry.
+ * @return         The transient storage value at the given storage key or null bytes
+ *                 if the account does not exist.
+ */
+typedef evmc_bytes32 (*evmc_get_transient_storage_fn)(struct evmc_host_context* context,
+                                                      const evmc_address* address,
+                                                      const evmc_bytes32* key);
 
 
 /**
@@ -618,6 +659,25 @@ typedef enum evmc_storage_status (*evmc_set_storage_fn)(struct evmc_host_context
                                                         const evmc_address* address,
                                                         const evmc_bytes32* key,
                                                         const evmc_bytes32* value);
+
+/**
+ * Set transient storage callback function.
+ *
+ * This callback function is used by a VM to update
+ * the given account's transient storage (EIP-1153) entry.
+ * The VM MUST make sure that the account exists. This requirement is only a formality because
+ * VM implementations only modify storage of the account of the current execution context
+ * (i.e. referenced by evmc_message::recipient).
+ *
+ * @param context  The pointer to the Host execution context.
+ * @param address  The address of the account.
+ * @param key      The index of the transient storage entry.
+ * @param value    The value to be stored.
+ */
+typedef void (*evmc_set_transient_storage_fn)(struct evmc_host_context* context,
+                                              const evmc_address* address,
+                                              const evmc_bytes32* key,
+                                              const evmc_bytes32* value);
 
 /**
  * Get balance callback function.
@@ -824,6 +884,12 @@ struct evmc_host_interface
 
     /** Access storage callback function. */
     evmc_access_storage_fn access_storage;
+
+    /** Get transient storage callback function. */
+    evmc_get_transient_storage_fn get_transient_storage;
+
+    /** Set transient storage callback function. */
+    evmc_set_transient_storage_fn set_transient_storage;
 };
 
 
@@ -962,19 +1028,33 @@ enum evmc_revision
     /**
      * The Cancun revision.
      *
-     * The future next revision after Shanghai.
+     * https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/cancun.md
      */
     EVMC_CANCUN = 12,
 
+    /**
+     * The Prague revision.
+     *
+     * The future next revision after Cancun.
+     */
+    EVMC_PRAGUE = 13,
+
+    /**
+     * The Osaka revision.
+     *
+     * The future next revision after Prague.
+     */
+    EVMC_OSAKA = 14,
+
     /** The maximum EVM revision supported. */
-    EVMC_MAX_REVISION = EVMC_CANCUN,
+    EVMC_MAX_REVISION = EVMC_OSAKA,
 
     /**
      * The latest known EVM revision with finalized specification.
      *
      * This is handy for EVM tools to always use the latest revision available.
      */
-    EVMC_LATEST_STABLE_REVISION = EVMC_LONDON
+    EVMC_LATEST_STABLE_REVISION = EVMC_CANCUN
 };
 
 
@@ -1111,7 +1191,7 @@ struct evmc_vm
     /**
      * Optional pointer to function modifying VM's options.
      *
-     *  If the VM does not support this feature the pointer can be NULL.
+     * If the VM does not support this feature the pointer can be NULL.
      */
     evmc_set_option_fn set_option;
 };
@@ -1128,7 +1208,7 @@ struct evmc_vm
  *
  * @par Binaries naming convention
  * For VMs distributed as shared libraries, the name of the library SHOULD match the VM name.
- * The convetional library filename prefixes and extensions SHOULD be ignored by the Client.
+ * The conventional library filename prefixes and extensions SHOULD be ignored by the Client.
  * For example, the shared library with the "beta-interpreter" implementation may be named
  * `libbeta-interpreter.so`.
  *

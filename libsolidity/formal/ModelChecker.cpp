@@ -17,21 +17,12 @@
 // SPDX-License-Identifier: GPL-3.0
 
 #include <libsolidity/formal/ModelChecker.h>
-#ifdef HAVE_Z3
-#include <libsmtutil/Z3Interface.h>
-#endif
-#ifdef HAVE_Z3_DLOPEN
-#include <z3_version.h>
-#endif
 
-#if defined(__linux) || defined(__APPLE__)
 #include <boost/process.hpp>
-#endif
 
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view.hpp>
 
-using namespace std;
 using namespace solidity;
 using namespace solidity::util;
 using namespace solidity::langutil;
@@ -41,32 +32,33 @@ using namespace solidity::smtutil;
 ModelChecker::ModelChecker(
 	ErrorReporter& _errorReporter,
 	langutil::CharStreamProvider const& _charStreamProvider,
-	map<h256, string> const& _smtlib2Responses,
+	std::map<h256, std::string> const& _smtlib2Responses,
 	ModelCheckerSettings _settings,
 	ReadCallback::Callback const& _smtCallback
 ):
 	m_errorReporter(_errorReporter),
+	m_provedSafeReporter(m_provedSafeLogs),
 	m_settings(std::move(_settings)),
 	m_context(),
-	m_bmc(m_context, m_uniqueErrorReporter, _smtlib2Responses, _smtCallback, m_settings, _charStreamProvider),
-	m_chc(m_context, m_uniqueErrorReporter, _smtlib2Responses, _smtCallback, m_settings, _charStreamProvider)
+	m_bmc(m_context, m_uniqueErrorReporter, m_unsupportedErrorReporter, m_provedSafeReporter, _smtlib2Responses, _smtCallback, m_settings, _charStreamProvider),
+	m_chc(m_context, m_uniqueErrorReporter, m_unsupportedErrorReporter, m_provedSafeReporter, _smtlib2Responses, _smtCallback, m_settings, _charStreamProvider)
 {
 }
 
 // TODO This should be removed for 0.9.0.
-bool ModelChecker::isPragmaPresent(vector<shared_ptr<SourceUnit>> const& _sources)
+bool ModelChecker::isPragmaPresent(std::vector<std::shared_ptr<SourceUnit>> const& _sources)
 {
 	return ranges::any_of(_sources, [](auto _source) {
 		return _source && _source->annotation().experimentalFeatures.count(ExperimentalFeature::SMTChecker);
 	});
 }
 
-void ModelChecker::checkRequestedSourcesAndContracts(vector<shared_ptr<SourceUnit>> const& _sources)
+void ModelChecker::checkRequestedSourcesAndContracts(std::vector<std::shared_ptr<SourceUnit>> const& _sources)
 {
-	map<string, set<string>> exist;
+	std::map<std::string, std::set<std::string>> exist;
 	for (auto const& source: _sources)
 		for (auto node: source->nodes())
-			if (auto contract = dynamic_pointer_cast<ContractDefinition>(node))
+			if (auto contract = std::dynamic_pointer_cast<ContractDefinition>(node))
 				exist[contract->sourceUnitName()].insert(contract->name());
 
 	// Requested sources
@@ -100,7 +92,7 @@ void ModelChecker::analyze(SourceUnit const& _source)
 	{
 		PragmaDirective const* smtPragma = nullptr;
 		for (auto node: _source.nodes())
-			if (auto pragma = dynamic_pointer_cast<PragmaDirective>(node))
+			if (auto pragma = std::dynamic_pointer_cast<PragmaDirective>(node))
 				if (
 					pragma->literals().size() >= 2 &&
 					pragma->literals().at(1) == "SMTChecker"
@@ -125,18 +117,44 @@ void ModelChecker::analyze(SourceUnit const& _source)
 	if (m_settings.engine.chc)
 		m_chc.analyze(_source);
 
-	auto solvedTargets = m_chc.safeTargets();
+	std::map<ASTNode const*, std::set<VerificationTargetType>, smt::EncodingContext::IdCompare> solvedTargets;
+
+	for (auto const& [node, targets]: m_chc.safeTargets())
+		for (auto const& target: targets)
+			solvedTargets[node].insert(target.type);
+
 	for (auto const& [node, targets]: m_chc.unsafeTargets())
 		solvedTargets[node] += targets | ranges::views::keys;
 
 	if (m_settings.engine.bmc)
 		m_bmc.analyze(_source, solvedTargets);
 
+	if (m_settings.showUnsupported)
+	{
+		m_errorReporter.append(m_unsupportedErrorReporter.errors());
+		m_unsupportedErrorReporter.clear();
+	}
+	else if (!m_unsupportedErrorReporter.errors().empty())
+		m_errorReporter.warning(
+			5724_error,
+			{},
+			"SMTChecker: " +
+			std::to_string(m_unsupportedErrorReporter.errors().size()) +
+			" unsupported language feature(s)."
+			" Enable the model checker option \"show unsupported\" to see all of them."
+		);
+
 	m_errorReporter.append(m_uniqueErrorReporter.errors());
 	m_uniqueErrorReporter.clear();
+
+	if (m_settings.showProvedSafe)
+	{
+		m_errorReporter.append(m_provedSafeReporter.errors());
+		m_provedSafeReporter.clear();
+	}
 }
 
-vector<string> ModelChecker::unhandledQueries()
+std::vector<std::string> ModelChecker::unhandledQueries()
 {
 	return m_bmc.unhandledQueries() + m_chc.unhandledQueries();
 }
@@ -144,14 +162,12 @@ vector<string> ModelChecker::unhandledQueries()
 SMTSolverChoice ModelChecker::availableSolvers()
 {
 	smtutil::SMTSolverChoice available = smtutil::SMTSolverChoice::SMTLIB2();
-#if defined(__linux) || defined(__APPLE__)
 	available.eld = !boost::process::search_path("eld").empty();
-#endif
-#ifdef HAVE_Z3
-	available.z3 = solidity::smtutil::Z3Interface::available();
-#endif
-#ifdef HAVE_CVC4
-	available.cvc4 = true;
+	available.cvc5 = !boost::process::search_path("cvc5").empty();
+#ifdef EMSCRIPTEN_BUILD
+	available.z3 = true;
+#else
+	available.z3 = !boost::process::search_path("z3").empty();
 #endif
 	return available;
 }
@@ -160,13 +176,13 @@ SMTSolverChoice ModelChecker::checkRequestedSolvers(SMTSolverChoice _enabled, Er
 {
 	SMTSolverChoice availableSolvers{ModelChecker::availableSolvers()};
 
-	if (_enabled.cvc4 && !availableSolvers.cvc4)
+	if (_enabled.cvc5 && !availableSolvers.cvc5)
 	{
-		_enabled.cvc4 = false;
+		_enabled.cvc5 = false;
 		_errorReporter.warning(
 			4902_error,
 			SourceLocation(),
-			"Solver CVC4 was selected for SMTChecker but it is not available."
+			"Solver cvc5 was selected for SMTChecker but it is not available."
 		);
 	}
 
@@ -191,9 +207,6 @@ SMTSolverChoice ModelChecker::checkRequestedSolvers(SMTSolverChoice _enabled, Er
 			8158_error,
 			SourceLocation(),
 			"Solver z3 was selected for SMTChecker but it is not available."
-#ifdef HAVE_Z3_DLOPEN
-			" libz3.so." + to_string(Z3_MAJOR_VERSION) + "." + to_string(Z3_MINOR_VERSION) + " was not found."
-#endif
 		);
 	}
 

@@ -29,6 +29,7 @@ disable=
     too-many-branches,
     too-many-instance-attributes,
     too-many-locals,
+    too-many-positional-arguments,
     too-many-public-methods,
     too-many-statements,
     ungrouped-imports
@@ -63,3 +64,7 @@ expected-line-ending-format=LF
 
 # Maximum number of characters on a single line.
 max-line-length=130
+
+[MISCELLANEOUS]
+
+notes=XXX,TMP

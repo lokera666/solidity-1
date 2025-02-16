@@ -9,10 +9,10 @@
 ## This requires the following entries in /etc/dput.cf:
 ##
 ##  [cpp-build-deps]
-##  fqdn			= ppa.launchpad.net
-##  method			= ftp
-##  incoming		= ~ethereum/cpp-build-deps
-##  login			= anonymous
+##  fqdn            = ppa.launchpad.net
+##  method          = ftp
+##  incoming        = ~ethereum/cpp-build-deps
+##  login           = anonymous
 ##
 ## To interact with launchpad, you need to set the variables $LAUNCHPAD_EMAIL
 ## and $LAUNCHPAD_KEYID in the file .release_ppa_auth in the root directory of
@@ -41,7 +41,7 @@ sourcePPAConfig
 # Sanity check
 checkDputEntries "\[cpp-build-deps\]"
 
-DISTRIBUTIONS="focal jammy kinetic"
+DISTRIBUTIONS="jammy noble oracular"
 
 for distribution in $DISTRIBUTIONS
 do
@@ -73,23 +73,23 @@ cp "/tmp/${packagename}_${debversion}.orig.tar.gz" ../
 # Create debian package information
 
 mkdir debian
-echo 13 > debian/compat
+echo 9 > debian/compat
 # TODO: the Z3 packages have different build dependencies
 cat <<EOF > debian/control
 Source: z3-static
 Section: science
 Priority: extra
 Maintainer: Daniel Kirchner <daniel@ekpyron.org>
-Build-Depends: debhelper (>= 13.0.0),
+Build-Depends: debhelper (>= 9.0.0),
                cmake,
-               g++ (>= 9.0),
+               g++ (>= 5.0),
                git,
                libgmp-dev,
                dh-python,
                python3
 Standards-Version: 3.9.6
 Homepage: https://github.com/Z3Prover/z3
-Vcs-Git: git://github.com/Z3Prover/z3.git
+Vcs-Git: https://github.com/Z3Prover/z3.git
 Vcs-Browser: https://github.com/Z3Prover/z3
 
 Package: z3-static

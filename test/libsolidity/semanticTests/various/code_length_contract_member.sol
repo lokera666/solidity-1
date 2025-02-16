@@ -12,6 +12,6 @@ contract C {
     }
 }
 // ====
-// compileToEwasm: also
+// bytecodeFormat: legacy
 // ----
 // f() -> 0x20, 0x20, true

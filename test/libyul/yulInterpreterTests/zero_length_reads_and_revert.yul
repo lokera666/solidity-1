@@ -18,6 +18,7 @@
 }
 // ====
 // EVMVersion: >=constantinople
+// bytecodeFormat: legacy
 // ----
 // Trace:
 //   RETURNDATACOPY(0, 1, 0)
@@ -38,3 +39,4 @@
 //   REVERT(0, 0)
 // Memory dump:
 // Storage dump:
+// Transient storage dump:

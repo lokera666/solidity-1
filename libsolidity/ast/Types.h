@@ -70,7 +70,7 @@ inline rational makeRational(bigint const& _numerator, bigint const& _denominato
 		return rational(_numerator, _denominator);
 }
 
-enum class DataLocation { Storage, CallData, Memory };
+enum class DataLocation { Storage, Transient, CallData, Memory };
 
 
 /**
@@ -174,9 +174,26 @@ public:
 
 	enum class Category
 	{
-		Address, Integer, RationalNumber, StringLiteral, Bool, FixedPoint, Array, ArraySlice,
-		FixedBytes, Contract, Struct, Function, Enum, UserDefinedValueType, Tuple,
-		Mapping, TypeType, Modifier, Magic, Module,
+		Address,
+		Integer,
+		RationalNumber,
+		StringLiteral,
+		Bool,
+		FixedPoint,
+		Array,
+		ArraySlice,
+		FixedBytes,
+		Contract,
+		Struct,
+		Function,
+		Enum,
+		UserDefinedValueType,
+		Tuple,
+		Mapping,
+		TypeType,
+		Modifier,
+		Magic,
+		Module,
 		InaccessibleDynamic
 	};
 
@@ -377,6 +394,21 @@ public:
 	/// Clears all internally cached values (if any).
 	virtual void clearCache() const;
 
+	/// Scans all "using for" directives in the @a _scope for functions implementing
+	/// the operator represented by @a _token. Returns the set of all definitions where the type
+	/// of the first argument matches this type object.
+	///
+	/// @note: If the AST has passed analysis without errors,
+	/// the function will find at most one definition for an operator.
+	///
+	/// @param _unary If true, only definitions that accept exactly one argument are included.
+	/// Otherwise only definitions that accept exactly two arguments.
+	std::set<FunctionDefinition const*, ASTCompareByID<ASTNode>> operatorDefinitions(
+		Token _token,
+		ASTNode const& _scope,
+		bool _unary
+	) const;
+
 private:
 	/// @returns a member list containing all members added to this type by `using for` directives.
 	static MemberList::MemberMap attachedFunctions(Type const& _type, ASTNode const& _scope);
@@ -463,6 +495,7 @@ public:
 	TypeResult unaryOperatorResult(Token _operator) const override;
 	TypeResult binaryOperatorResult(Token _operator, Type const* _other) const override;
 
+	bool operator==(IntegerType const& _other) const;
 	bool operator==(Type const& _other) const override;
 
 	unsigned calldataEncodedSize(bool _padded = true) const override { return _padded ? 32 : m_bits / 8; }
@@ -771,7 +804,7 @@ public:
 	/// if the type has an interfaceType.
 	virtual BoolResult validForLocation(DataLocation _loc) const = 0;
 
-	bool operator==(ReferenceType const& _other) const
+	bool equals(ReferenceType const& _other) const
 	{
 		return location() == _other.location() && isPointer() == _other.isPointer();
 	}
@@ -822,6 +855,7 @@ public:
 	BoolResult isImplicitlyConvertibleTo(Type const& _convertTo) const override;
 	BoolResult isExplicitlyConvertibleTo(Type const& _convertTo) const override;
 	std::string richIdentifier() const override;
+	bool operator==(ArrayType const& _other) const;
 	bool operator==(Type const& _other) const override;
 	unsigned calldataEncodedSize(bool) const override;
 	unsigned calldataEncodedTailSize() const override;
@@ -969,8 +1003,8 @@ public:
 	FunctionType const* newExpressionType() const;
 
 	/// @returns a list of all state variables (including inherited) of the contract and their
-	/// offsets in storage.
-	std::vector<std::tuple<VariableDeclaration const*, u256, unsigned>> stateVariables() const;
+	/// offsets in storage/transient storage.
+	std::vector<std::tuple<VariableDeclaration const*, u256, unsigned>> stateVariables(DataLocation _location) const;
 	/// @returns a list of all immutable variables (including inherited) of the contract.
 	std::vector<VariableDeclaration const*> immutableVariables() const;
 protected:
@@ -1116,6 +1150,7 @@ public:
 	Declaration const* typeDefinition() const override;
 
 	std::string richIdentifier() const override;
+	bool operator==(UserDefinedValueType const& _other) const;
 	bool operator==(Type const& _other) const override;
 
 	unsigned calldataEncodedSize(bool _padded) const override { return underlyingType().calldataEncodedSize(_padded); }
@@ -1238,6 +1273,7 @@ public:
 		SetGas, ///< modify the default gas value for the function call
 		SetValue, ///< modify the default value transfer for the function call
 		BlockHash, ///< BLOCKHASH
+		BlobHash, ///< BLOBHASH
 		AddMod, ///< ADDMOD
 		MulMod, ///< MULMOD
 		ArrayPush, ///< .push() to a dynamically sized array in storage
@@ -1566,6 +1602,7 @@ public:
 	bool hasSimpleZeroValueInMemory() const override { solAssert(false, ""); }
 	std::string toString(bool _withoutDataLocation) const override { return "type(" + m_actualType->toString(_withoutDataLocation) + ")"; }
 	MemberList::MemberMap nativeMembers(ASTNode const* _currentScope) const override;
+	Type const* mobileType() const override { return nullptr; }
 
 	BoolResult isExplicitlyConvertibleTo(Type const& _convertTo) const override;
 protected:
@@ -1591,6 +1628,7 @@ public:
 	bool hasSimpleZeroValueInMemory() const override { solAssert(false, ""); }
 	std::string richIdentifier() const override;
 	bool operator==(Type const& _other) const override;
+	bool operator==(ModifierType const& _other) const;
 	std::string toString(bool _withoutDataLocation) const override;
 protected:
 	std::vector<std::tuple<std::string, Type const*>> makeStackItems() const override { return {}; }
@@ -1627,6 +1665,8 @@ private:
 
 /**
  * Special type for magic variables (block, msg, tx, type(...)), similar to a struct but without any reference.
+ *
+ * It is also the type shared by all instances of all custom error types.
  */
 class MagicType: public Type
 {
@@ -1636,6 +1676,7 @@ public:
 		Message, ///< "msg"
 		Transaction, ///< "tx"
 		ABI, ///< "abi"
+		Error, ///< custom error instance
 		MetaType ///< "type(...)"
 	};
 
@@ -1661,6 +1702,8 @@ public:
 	Kind kind() const { return m_kind; }
 
 	Type const* typeArgument() const;
+
+	Type const* mobileType() const override { return nullptr; }
 
 protected:
 	std::vector<std::tuple<std::string, Type const*>> makeStackItems() const override { return {}; }

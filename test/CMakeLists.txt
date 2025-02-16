@@ -31,9 +31,10 @@ set(libsolutil_sources
     libsolutil/Checksum.cpp
     libsolutil/CommonData.cpp
     libsolutil/CommonIO.cpp
+    libsolutil/DisjointSet.cpp
+    libsolutil/DominatorFinderTest.cpp
     libsolutil/FixedHash.cpp
     libsolutil/FunctionSelector.cpp
-    libsolutil/IndentedWriter.cpp
     libsolutil/IpfsHash.cpp
     libsolutil/IterateReplacing.cpp
     libsolutil/JSON.cpp
@@ -74,6 +75,8 @@ set(libsolidity_sources
     libsolidity/ASTJSONTest.h
     libsolidity/ErrorCheck.cpp
     libsolidity/ErrorCheck.h
+    libsolidity/FunctionDependencyGraphTest.cpp
+    libsolidity/FunctionDependencyGraphTest.h
     libsolidity/GasCosts.cpp
     libsolidity/GasMeter.cpp
     libsolidity/GasTest.cpp
@@ -84,6 +87,10 @@ set(libsolidity_sources
     libsolidity/Metadata.cpp
     libsolidity/MemoryGuardTest.cpp
     libsolidity/MemoryGuardTest.h
+    libsolidity/NatspecJSONTest.cpp
+    libsolidity/NatspecJSONTest.h
+    libsolidity/OptimizedIRCachingTest.cpp
+    libsolidity/OptimizedIRCachingTest.h
     libsolidity/SemanticTest.cpp
     libsolidity/SemanticTest.h
     libsolidity/SemVerMatcher.cpp
@@ -95,7 +102,6 @@ set(libsolidity_sources
     libsolidity/SolidityExecutionFramework.h
     libsolidity/SolidityExpressionCompiler.cpp
     libsolidity/SolidityNameAndTypeResolution.cpp
-    libsolidity/SolidityNatspecJSON.cpp
     libsolidity/SolidityOptimizer.cpp
     libsolidity/SolidityParser.cpp
     libsolidity/SolidityTypes.cpp
@@ -105,6 +111,8 @@ set(libsolidity_sources
     libsolidity/ViewPureChecker.cpp
     libsolidity/analysis/FunctionCallGraph.cpp
     libsolidity/interface/FileReader.cpp
+    libsolidity/ASTPropertyTest.h
+    libsolidity/ASTPropertyTest.cpp
 )
 detect_stray_source_files("${libsolidity_sources}" "libsolidity/")
 
@@ -112,6 +120,8 @@ set(libsolidity_util_sources
     libsolidity/util/BytesUtils.cpp
     libsolidity/util/BytesUtilsTests.cpp
     libsolidity/util/BytesUtils.h
+    libsolidity/util/Common.cpp
+    libsolidity/util/Common.h
     libsolidity/util/ContractABIUtils.cpp
     libsolidity/util/ContractABIUtils.h
     libsolidity/util/SoltestErrors.h
@@ -135,8 +145,6 @@ set(libyul_sources
     libyul/ControlFlowSideEffectsTest.h
     libyul/EVMCodeTransformTest.cpp
     libyul/EVMCodeTransformTest.h
-    libyul/EwasmTranslationTest.cpp
-    libyul/EwasmTranslationTest.h
     libyul/FunctionSideEffects.cpp
     libyul/FunctionSideEffects.h
     libyul/Inliner.cpp
@@ -146,9 +154,12 @@ set(libyul_sources
     libyul/ObjectCompilerTest.h
     libyul/ObjectParser.cpp
     libyul/Parser.cpp
+    libyul/SSAControlFlowGraphTest.cpp
+    libyul/SSAControlFlowGraphTest.h
     libyul/StackLayoutGeneratorTest.cpp
     libyul/StackLayoutGeneratorTest.h
     libyul/StackShufflingTest.cpp
+    libyul/StackShufflingTest.h
     libyul/SyntaxTest.h
     libyul/SyntaxTest.cpp
     libyul/YulInterpreterTest.cpp

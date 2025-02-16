@@ -14,5 +14,5 @@ contract C is A {
 // ====
 // SMTEngine: all
 // ----
-// Warning 6328: (60-74): CHC: Assertion violation happens here.\nCounterexample:\nv = 0, x = 1\n\nTransaction trace:\nC.constructor(){ msg.value: 1 }
-// Warning 6328: (240-254): CHC: Assertion violation happens here.\nCounterexample:\nv = 1, x = 1\n\nTransaction trace:\nC.constructor(){ msg.value: 1 }
+// Warning 6328: (60-74): CHC: Assertion violation happens here.\nCounterexample:\nv = 0, x = 115792089237316195423570985008687907853269984665640564039457584007913129637498\n\nTransaction trace:\nC.constructor(){ msg.value: 115792089237316195423570985008687907853269984665640564039457584007913129637498 }
+// Warning 6328: (240-254): CHC: Assertion violation happens here.\nCounterexample:\nv = 115792089237316195423570985008687907853269984665640564039457584007913129637498, x = 115792089237316195423570985008687907853269984665640564039457584007913129637498\n\nTransaction trace:\nC.constructor(){ msg.value: 115792089237316195423570985008687907853269984665640564039457584007913129637498 }

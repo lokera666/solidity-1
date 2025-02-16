@@ -4,9 +4,11 @@
 }
 // ====
 // EVMVersion: >=byzantium
+// bytecodeFormat: legacy
 // ----
 // Trace:
 //   STATICCALL(153, 69, 0, 32, 48, 32)
 // Memory dump:
 // Storage dump:
 //   0000000000000000000000000000000000000000000000000000000000000064: 0000000000000000000000000000000000000000000000000000000000000001
+// Transient storage dump:

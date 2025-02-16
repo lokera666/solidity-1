@@ -56,6 +56,8 @@ public:
 		smt::EncodingContext& _context,
 		ModelCheckerSettings _settings,
 		langutil::UniqueErrorReporter& _errorReporter,
+		langutil::UniqueErrorReporter& _unsupportedErrorReporter,
+		langutil::ErrorReporter& _provedSafeReporter,
 		langutil::CharStreamProvider const& _charStreamProvider
 	);
 
@@ -69,7 +71,7 @@ public:
 
 	/// @returns the innermost element in a chain of 1-tuples if applicable,
 	/// otherwise _expr.
-	static Expression const* innermostTuple(Expression const& _expr);
+	static Expression const& innermostTuple(Expression const& _expr);
 
 	/// @returns the underlying type if _type is UserDefinedValueType,
 	/// and _type otherwise.
@@ -113,9 +115,6 @@ public:
 	/// @returns the ModifierDefinition of a ModifierInvocation if possible, or nullptr.
 	static ModifierDefinition const* resolveModifierInvocation(ModifierInvocation const& _invocation, ContractDefinition const* _contract);
 
-	/// @returns the SourceUnit that contains _scopable.
-	static SourceUnit const* sourceUnitContaining(Scopable const& _scopable);
-
 	/// @returns the arguments for each base constructor call in the hierarchy of @a _contract.
 	std::map<ContractDefinition const*, std::vector<ASTPointer<frontend::Expression>>> baseArguments(ContractDefinition const& _contract);
 
@@ -124,12 +123,26 @@ public:
 	static RationalNumberType const* isConstant(Expression const& _expr);
 
 	static std::set<FunctionCall const*, ASTCompareByID<FunctionCall>> collectABICalls(ASTNode const* _node);
+	static std::set<FunctionCall const*, ASTCompareByID<FunctionCall>> collectBytesConcatCalls(ASTNode const* _node);
 
 	/// @returns all the sources that @param _source depends on,
 	/// including itself.
 	static std::set<SourceUnit const*, ASTNode::CompareByID> sourceDependencies(SourceUnit const& _source);
 
 protected:
+	struct TransientDataLocationChecker: ASTConstVisitor
+	{
+		TransientDataLocationChecker(ContractDefinition const& _contract) { _contract.accept(*this); }
+
+		void endVisit(VariableDeclaration const& _var)
+		{
+			solUnimplementedAssert(
+				_var.referenceLocation() != VariableDeclaration::Location::Transient,
+				"Transient storage variables are not supported."
+			);
+		}
+	};
+
 	void resetSourceAnalysis();
 
 	// TODO: Check that we do not have concurrent reads and writes to a variable,
@@ -170,7 +183,9 @@ protected:
 	void endVisit(IndexAccess const& _node) override;
 	void endVisit(IndexRangeAccess const& _node) override;
 	bool visit(InlineAssembly const& _node) override;
+	bool visit(Break const&) override { return false; }
 	void endVisit(Break const&) override {}
+	bool visit(Continue const&) override { return false; }
 	void endVisit(Continue const&) override {}
 	bool visit(TryCatchClause const&) override { return true; }
 	void endVisit(TryCatchClause const&) override {}
@@ -211,8 +226,10 @@ protected:
 	void visitAssert(FunctionCall const& _funCall);
 	void visitRequire(FunctionCall const& _funCall);
 	void visitABIFunction(FunctionCall const& _funCall);
+	void visitBytesConcat(FunctionCall const& _funCall);
 	void visitCryptoFunction(FunctionCall const& _funCall);
 	void visitGasLeft(FunctionCall const& _funCall);
+	void visitBlobHash(FunctionCall const& _funCall);
 	virtual void visitAddMulMod(FunctionCall const& _funCall);
 	void visitWrapUnwrap(FunctionCall const& _funCall);
 	void visitObjectCreation(FunctionCall const& _funCall);
@@ -275,7 +292,7 @@ protected:
 	/// @returns a pair of expressions representing _left / _right and _left mod _right, respectively.
 	/// Uses slack variables and additional constraints to express the results using only operations
 	/// more friendly to the SMT solver (multiplication, addition, subtraction and comparison).
-	std::pair<smtutil::Expression, smtutil::Expression>	divModWithSlacks(
+	std::pair<smtutil::Expression, smtutil::Expression> divModWithSlacks(
 		smtutil::Expression _left,
 		smtutil::Expression _right,
 		IntegerType const& _type
@@ -403,12 +420,16 @@ protected:
 
 	/// Creates symbolic expressions for the returned values
 	/// and set them as the components of the symbolic tuple.
-	void createReturnedExpressions(FunctionCall const& _funCall, ContractDefinition const* _contextContract);
+	void createReturnedExpressions(FunctionDefinition const* _funDef, Expression const& _calledExpr);
 
 	/// @returns the symbolic arguments for a function call,
 	/// taking into account attached functions and
 	/// type conversion.
-	std::vector<smtutil::Expression> symbolicArguments(FunctionCall const& _funCall, ContractDefinition const* _contextContract);
+	std::vector<smtutil::Expression> symbolicArguments(
+		std::vector<ASTPointer<VariableDeclaration>> const& _funParameters,
+		std::vector<Expression const*> const& _arguments,
+		std::optional<Expression const*> _calledExpr
+	);
 
 	smtutil::Expression constantExpr(Expression const& _expr, VariableDeclaration const& _var);
 
@@ -418,6 +439,9 @@ protected:
 	std::set<FunctionDefinition const*, ASTNode::CompareByID> const& allFreeFunctions() const { return m_freeFunctions; }
 	/// Create symbolic variables for the free constants in all @param _sources.
 	void createFreeConstants(std::set<SourceUnit const*, ASTNode::CompareByID> const& _sources);
+
+	/// Create symbolic variables for all state variables for all contracts in all @param _sources.
+	void createStateVariables(std::set<SourceUnit const*, ASTNode::CompareByID> const& _sources);
 
 	/// @returns a note to be added to warnings.
 	std::string extraComment();
@@ -443,6 +467,8 @@ protected:
 	bool m_checked = true;
 
 	langutil::UniqueErrorReporter& m_errorReporter;
+	langutil::UniqueErrorReporter& m_unsupportedErrors;
+	langutil::ErrorReporter& m_provedSafeReporter;
 
 	/// Stores the current function/modifier call/invocation path.
 	std::vector<CallStackEntry> m_callStack;
@@ -482,7 +508,7 @@ protected:
 	ContractDefinition const* m_currentContract = nullptr;
 
 	/// Stores the free functions and internal library functions.
-	/// Those need to be encoded repeatedely for every analyzed contract.
+	/// Those need to be encoded repeatedly for every analyzed contract.
 	std::set<FunctionDefinition const*, ASTNode::CompareByID> m_freeFunctions;
 
 	/// Stores the context of the encoding.
@@ -495,6 +521,14 @@ protected:
 	langutil::CharStreamProvider const& m_charStreamProvider;
 
 	smt::SymbolicState& state();
+
+private:
+	smtutil::Expression createSelectExpressionForFunction(
+		smtutil::Expression symbFunction,
+		std::vector<frontend::ASTPointer<frontend::Expression const>> const& args,
+		frontend::TypePointers const& inTypes,
+		unsigned long argsActualLength
+	);
 };
 
 }

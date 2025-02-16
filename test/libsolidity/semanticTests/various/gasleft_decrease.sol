@@ -14,9 +14,8 @@ contract C {
         return true;
     }
 }
-
 // ====
-// compileToEwasm: also
+// bytecodeFormat: legacy
 // ----
 // f() -> true
 // g() -> true
