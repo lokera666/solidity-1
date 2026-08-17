@@ -5,6 +5,7 @@ Language Features:
 Compiler Features:
 
 Bugfixes:
+* Parser: Fix inverted version pragma range comparison for components in the range [2**31, 2**32).
 
 
 ### 0.8.37 (2026-09-10)
