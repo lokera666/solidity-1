@@ -76,7 +76,8 @@ At least a day before the release:
 - [ ] Create a pull request in solc-bin and merge.
 
 ### Homebrew and MacOS
-- [ ] Update the version and the hash (`sha256sum solidity_$VERSION.tar.gz`) in the [`solidity` formula in Homebrew core repository](https://github.com/Homebrew/homebrew-core/blob/master/Formula/s/solidity.rb).
+- [ ] Verify that the Homebrew bot picked up on the new release and a PR has been [automatically submitted](https://github.com/Homebrew/homebrew-core/pulls?q=is:pr+solidity) and merged (usually takes a while, 1h+).
+    If not, create a PR updating the version and the hash (`sha256sum solidity_$VERSION.tar.gz`) in the [`solidity` formula in Homebrew core repository](https://github.com/Homebrew/homebrew-core/blob/master/Formula/s/solidity.rb).
 
 ### Docker
 - [ ] Make sure `docker-buildx` is installed.
