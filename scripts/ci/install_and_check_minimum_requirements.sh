@@ -52,7 +52,7 @@ if [[ $installed_boost_version != ${BOOST_VERSION}* ]]; then
 fi
 
 echo "-- Installing CMake ${CMAKE_FULL_VERSION}"
-wget "https://cmake.org/files/v${CMAKE_MAJOR}.${CMAKE_MINOR}/cmake-${CMAKE_FULL_VERSION}-Linux-x86_64.tar.gz"
+wget "https://github.com/Kitware/CMake/releases/download/v${CMAKE_FULL_VERSION}/cmake-${CMAKE_FULL_VERSION}-Linux-x86_64.tar.gz"
 tar --extract --gzip --file "cmake-${CMAKE_FULL_VERSION}-Linux-x86_64.tar.gz"
 sudo mv "cmake-${CMAKE_FULL_VERSION}-Linux-x86_64" "/opt/cmake-${CMAKE_FULL_VERSION}"
 sudo ln --symbolic "/opt/cmake-${CMAKE_FULL_VERSION}/bin/"* /usr/local/bin/
