@@ -275,9 +275,16 @@ commands:
           - gcc
           - clang
     steps:
+      - restore_cache:
+          keys:
+            - cmake-download-{{ checksum "scripts/ci/install_and_check_minimum_requirements.sh" }}
       - run:
           name: Install and check minimum requirements
           command: scripts/ci/install_and_check_minimum_requirements.sh "--<< parameters.compiler >>"
+      - save_cache:
+          key: cmake-download-{{ checksum "scripts/ci/install_and_check_minimum_requirements.sh" }}
+          paths:
+            - ~/.cache/cmake-download
 
   run_build:
     steps:
