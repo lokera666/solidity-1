@@ -13,6 +13,7 @@ Bugfixes:
 * Parser: Fix inverted version pragma range comparison for components in the range [2**31, 2**32).
 
 Build System:
+* Switch from C++20 to C++23 as the target standard.
 * Update emscripten to version 3.1.24.
 
 
