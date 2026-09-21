@@ -67,8 +67,8 @@ RUN <<-EOF
 		-DZ3_SINGLE_THREADED=ON \
 		-DCMAKE_CXX_FLAGS="-s DISABLE_EXCEPTION_CATCHING=0" \
 		..
-	make
-	make install
+	cmake --build . --parallel "$(nproc)"
+	cmake --install .
 	rm -r /usr/src/z3
 EOF
 
