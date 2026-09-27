@@ -980,20 +980,6 @@ std::optional<Json> CompilerStack::yulIRAst(std::string const& _contractName) co
 	return loadGeneratedIR(*currentContract.yulIR).astJson();
 }
 
-std::optional<Json> CompilerStack::yulCFGJson(std::string const& _contractName) const
-{
-	solAssert(m_stackState == CompilationSuccessful, "Compilation was not successful.");
-
-	// NOTE: Intentionally not using LazyInit. The artifact can get very large and we don't want to
-	// keep it around when compiling a large project containing many contracts.
-	Contract const& currentContract = contract(_contractName);
-	yulAssert(currentContract.contract);
-	yulAssert(currentContract.yulIROptimized.has_value() == currentContract.contract->canBeDeployed());
-	if (!currentContract.yulIROptimized)
-		return std::nullopt;
-	return loadGeneratedIR(*currentContract.yulIROptimized).cfgJson();
-}
-
 std::optional<std::string> const& CompilerStack::yulIROptimized(std::string const& _contractName) const
 {
 	solAssert(m_stackState == CompilationSuccessful, "Compilation was not successful.");
